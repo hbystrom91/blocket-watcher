@@ -14,17 +14,16 @@ puppeteer.use(StealthPlugin);
 const dirname = path.resolve();
 const filePath = path.join(dirname, "items.json");
 
+console.log("USER", process.env.USERNAME);
+
 const transporter = nodemailer.createTransport({
-  host: "0.0.0.0",
-  port: 1025,
-  secure: false,
-  tls: {
-    rejectUnauthorized: false,
+  host: "smtp.gmail.com",
+  port: 465,
+  secure: true,
+  auth: {
+    user: process.env.USERNAME,
+    pass: process.env.PASSWORD,
   },
-  // auth: {
-  //   user: testAccount.user, // generated ethereal user
-  //   pass: testAccount.pass // generated ethereal password
-  // }
 });
 
 const STOCKHOLM_REGION = 11;

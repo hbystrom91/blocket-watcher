@@ -15,4 +15,7 @@ module.exports = {
   rules: Object.assign({}, baseRules(), {
     "prettier/prettier": "error",
   }),
+  globals: {
+    process: true
+  }
 };
