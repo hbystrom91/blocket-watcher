@@ -9,7 +9,7 @@ const nodemailer = require("nodemailer");
 const fs = _fs.promises;
 
 const dirname = path.resolve();
-const itemsPath = path.join(dirname, "items.json");
+const storedPath = path.join(dirname, "stored.json");
 const watchPath = path.join(dirname, "watch.json");
 
 const transporter = nodemailer.createTransport({
@@ -42,7 +42,7 @@ const getData = async (filePath) => {
 };
 
 async function scrape(watch) {
-  const data = await getData(itemsPath);
+  const data = await getData(storedPath);
   if (typeof data[watch] === "undefined") {
     data[watch] = {};
   }
@@ -84,7 +84,7 @@ async function scrape(watch) {
   });
 
   await fs.writeFile(
-    itemsPath,
+    storedPath,
     JSON.stringify({ ...data, [watch]: data[watch] })
   );
 
@@ -124,7 +124,7 @@ async function notify(newItems) {
 }
 
 async function clean(items) {
-  const data = await getData(itemsPath);
+  const data = await getData(storedPath);
 
   for (const property in data) {
     if (!items.includes(property)) {
@@ -132,7 +132,7 @@ async function clean(items) {
     }
   }
 
-  await fs.writeFile(itemsPath, JSON.stringify(data));
+  await fs.writeFile(storedPath, JSON.stringify(data));
 }
 
 (async function init() {
