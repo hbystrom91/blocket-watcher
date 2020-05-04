@@ -1,15 +1,12 @@
 "use strict";
 
-const puppeteer = require("puppeteer-extra");
+const puppeteer = require("puppeteer");
 const cheerio = require("cheerio");
-const StealthPlugin = require("puppeteer-extra-plugin-stealth");
 const _fs = require("fs");
 const path = require("path");
 const nodemailer = require("nodemailer");
 
 const fs = _fs.promises;
-
-puppeteer.use(StealthPlugin);
 
 const dirname = path.resolve();
 const filePath = path.join(dirname, "items.json");
@@ -29,7 +26,7 @@ const transporter = nodemailer.createTransport({
 const STOCKHOLM_REGION = 11;
 const WATCH = ["Alvar aalto bord"];
 const BASE_URL = "https://www.blocket.se";
-const INTERVAL = 30000;
+const INTERVAL = 600000;
 
 const url = (_query) => {
   const query = encodeURIComponent(_query);
@@ -54,6 +51,7 @@ async function scrape(watch) {
 
   const browser = await puppeteer.launch({
     headless: true,
+    args: ["--no-sandbox"],
   });
   const page = await browser.newPage();
   await page.goto(url(watch));
@@ -83,6 +81,9 @@ async function scrape(watch) {
     filePath,
     JSON.stringify({ ...data, [watch]: data[watch] })
   );
+
+  await page.close();
+  await browser.close();
   return newItems;
 }
 
@@ -120,6 +121,11 @@ async function clean() {
 }
 
 (async function init() {
+  const rerun = () =>
+    setTimeout(() => {
+      init();
+    }, INTERVAL);
+
   try {
     await clean();
 
@@ -138,14 +144,12 @@ async function clean() {
     if (newItems.length) {
       console.log("New watched items: ", newItems);
       await notify(newItems);
+    } else {
+      console.log("No new items were found...");
     }
-
-    console.log("No new items were found...");
-
-    setTimeout(() => {
-      init();
-    }, INTERVAL);
+    rerun();
   } catch (error) {
     console.log("Error: Fetching failed: ", error);
+    rerun();
   }
 })();
