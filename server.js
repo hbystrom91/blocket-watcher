@@ -147,27 +147,31 @@ async function clean(items) {
 
     await clean(items);
 
-    const fetch = async () => {
-      const object = {};
-      for (const item of items) {
-        const response = await scrape(item);
-        if (Object.entries(response).length) {
-          object[item] = response;
+    if (items.length) {
+      const fetch = async () => {
+        const object = {};
+        for (const item of items) {
+          const response = await scrape(item);
+          if (Object.entries(response).length) {
+            object[item] = response;
+          }
         }
+        return object;
+      };
+
+      console.log("Fetching data...");
+      const newItems = await fetch();
+
+      if (Object.entries(newItems).length) {
+        console.log("New watched items: ", newItems);
+        await notify(newItems);
+      } else {
+        console.log("No new items were found...");
       }
-      return object;
-    };
-
-    console.log("Fetching data...");
-    const newItems = await fetch();
-
-    if (Object.entries(newItems).length) {
-      console.log("New watched items: ", newItems);
-      await notify(newItems);
+      rerun();
     } else {
-      console.log("No new items were found...");
+      console.log("There's no watched items to scrape for.");
     }
-    rerun();
   } catch (error) {
     console.log("Error: Fetching failed: ", error);
     rerun();
