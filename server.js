@@ -9,9 +9,8 @@ const nodemailer = require("nodemailer");
 const fs = _fs.promises;
 
 const dirname = path.resolve();
-const filePath = path.join(dirname, "items.json");
-
-console.log("USER", process.env.USERNAME);
+const itemsPath = path.join(dirname, "items.json");
+const watchPath = path.join(dirname, "watch.json");
 
 const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
@@ -24,7 +23,6 @@ const transporter = nodemailer.createTransport({
 });
 
 const STOCKHOLM_REGION = 11;
-const WATCH = ["Alvar aalto bord"];
 const BASE_URL = "https://www.blocket.se";
 const INTERVAL = 600000;
 
@@ -34,7 +32,7 @@ const url = (_query) => {
   return `${BASE_URL}/annonser/stockholm?q=${query}&r=${STOCKHOLM_REGION}`;
 };
 
-const getData = async () => {
+const getData = async (filePath) => {
   try {
     const saved = await fs.readFile(filePath);
     return JSON.parse(saved);
@@ -44,7 +42,7 @@ const getData = async () => {
 };
 
 async function scrape(watch) {
-  const data = await getData();
+  const data = await getData(itemsPath);
   if (typeof data[watch] === "undefined") {
     data[watch] = {};
   }
@@ -64,21 +62,29 @@ async function scrape(watch) {
   const items = selector
     .parents()
     .filter((_index, element) => $(element).attr("to") != null)
-    .map((_index, element) => [
-      [$(element).attr("aria-label"), $(element).attr("to")],
-    ])
+    .map((_index, element) => {
+      const $element = $(element);
+
+      return [
+        [
+          $element.attr("aria-label"),
+          $element.attr("to"),
+          $element.find("img").attr("src"),
+        ],
+      ];
+    })
     .get();
 
-  const newItems = [];
-  items.forEach(([name, value]) => {
+  const newItems = {};
+  items.forEach(([name, href, img]) => {
     if (data[watch][name] == null) {
-      data[watch][name] = value;
-      newItems.push({ [name]: value });
+      data[watch][name] = { href, img };
+      newItems[name] = { href, img };
     }
   });
 
   await fs.writeFile(
-    filePath,
+    itemsPath,
     JSON.stringify({ ...data, [watch]: data[watch] })
   );
 
@@ -87,16 +93,25 @@ async function scrape(watch) {
   return newItems;
 }
 
-async function notify() {
-  const mock = await getData();
+async function notify(newItems) {
+  const html = Object.entries(newItems).reduce(
+    (string, [watchedTitle, values]) => {
+      const children = Object.entries(values);
 
-  const html = Object.entries(mock).reduce(
-    (string, [watchedTitle, values]) =>
-      `${string}<h3>${watchedTitle}</h3>${Object.entries(values).reduce(
-        (string2, [name, to]) =>
-          `${string2}<p><a href=${BASE_URL + to}>${name}</a></p>`,
+      if (!children.length) {
+        return string;
+      }
+
+      return `${string}<h3>${watchedTitle.toUpperCase()}</h3>${Object.entries(
+        values
+      ).reduce(
+        (string2, [name, { href, img }]) =>
+          `${string2}<p><a href=${
+            BASE_URL + href
+          }>${name}</a></p><p><img src=${img}></p>`,
         ""
-      )}`,
+      )} `;
+    },
     ""
   );
 
@@ -108,16 +123,16 @@ async function notify() {
   });
 }
 
-async function clean() {
-  const data = await getData();
+async function clean(items) {
+  const data = await getData(itemsPath);
 
   for (const property in data) {
-    if (!WATCH.includes(property)) {
+    if (!items.includes(property)) {
       delete data[property];
     }
   }
 
-  await fs.writeFile(filePath, JSON.stringify(data));
+  await fs.writeFile(itemsPath, JSON.stringify(data));
 }
 
 (async function init() {
@@ -127,21 +142,26 @@ async function clean() {
     }, INTERVAL);
 
   try {
-    await clean();
+    const watched = await getData(watchPath);
+    const { items = [] } = watched;
+
+    await clean(items);
 
     const fetch = async () => {
-      const array = [];
-      for (const item of WATCH) {
+      const object = {};
+      for (const item of items) {
         const response = await scrape(item);
-        array.push(...response);
+        if (Object.entries(response).length) {
+          object[item] = response;
+        }
       }
-      return array;
+      return object;
     };
 
     console.log("Fetching data...");
     const newItems = await fetch();
 
-    if (newItems.length) {
+    if (Object.entries(newItems).length) {
       console.log("New watched items: ", newItems);
       await notify(newItems);
     } else {
